@@ -3,11 +3,17 @@ import numpy as np
 import cv2
 
 
-def generate_image(frequencies, amplitudes):
-    image = np.zeros((100, frequencies.shape[0]))
-    print(len(image[0]))
-    for row in range(image.shape[0]):
-        image[row] = amplitudes > 100-row
+def generate_image(width, height, frequencies, amplitudes, max_amp=70):
+    # Assume frequencies have been binned before this function
+    image = np.zeros((height, width))
+
+    x = (frequencies - min(frequencies)) / max(frequencies) * width
+    x = x.astype(np.int)
+    amplitudes = amplitudes/max_amp*height
+
+    for row in range(height):
+        for i in range(len(x) - 1):
+            image[row, x[i]:x[i+1]] = amplitudes[i] > height-row
     return image
 
 
@@ -36,7 +42,7 @@ def main(file, fps):
     for i in range(0, len(data), samples_per_piece):
         audio_slice = data[i:i + samples_per_piece]
         frequencies, amplitudes, = sample_to_data(audio_slice, sample_rate)
-        frame = generate_image(frequencies, amplitudes)
+        frame = generate_image(1920, 1080, frequencies, amplitudes)
 
         cv2.imshow('Frame', frame)
 
