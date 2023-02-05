@@ -3,13 +3,26 @@ import numpy as np
 import cv2
 
 
+def bin_data(frequencies, amplitudes, n_bins=20):
+    bid_width = -int(-len(amplitudes) / n_bins)
+    if len(amplitudes) % bid_width != 0:
+        pad_size = bid_width - amplitudes.shape[0] % bid_width
+        amplitudes = np.pad(amplitudes, (0, pad_size), mode='constant')
+    new_shape = (amplitudes.shape[0] // bid_width, bid_width)
+    amplitudes = amplitudes.reshape(new_shape)
+    return frequencies[0::bid_width], np.mean(amplitudes, axis=1)
+
+
 def generate_image(width, height, frequencies, amplitudes, max_amp=70):
     # Assume frequencies have been binned before this function
     image = np.zeros((height, width))
 
-    x = (frequencies - min(frequencies)) / max(frequencies) * width
+    bar_width = width / amplitudes.shape[0]
+
+    x = (frequencies - min(frequencies)) / max(frequencies) * (width - bar_width)
     x = x.astype(np.int)
-    amplitudes = amplitudes/max_amp*height
+    x = np.append(x, width)
+    amplitudes = amplitudes/max_amp * height
 
     for row in range(height):
         for i in range(len(x) - 1):
@@ -42,6 +55,7 @@ def main(file, fps):
     for i in range(0, len(data), samples_per_piece):
         audio_slice = data[i:i + samples_per_piece]
         frequencies, amplitudes, = sample_to_data(audio_slice, sample_rate)
+        frequencies, amplitudes = bin_data(frequencies, amplitudes)
         frame = generate_image(1920, 1080, frequencies, amplitudes)
 
         cv2.imshow('Frame', frame)
