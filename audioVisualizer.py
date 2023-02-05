@@ -13,9 +13,9 @@ def bin_data(frequencies, amplitudes, n_bins=20):
     return frequencies[0::bid_width], np.mean(amplitudes, axis=1)
 
 
-def generate_image(width, height, frequencies, amplitudes, max_amp=70):
+def generate_image(width, height, frequencies, amplitudes, max_amp=30):
     # Assume frequencies have been binned before this function
-    image = np.zeros((height, width))
+    image = np.zeros((height, width, 3))
 
     bar_width = width / amplitudes.shape[0]
 
@@ -25,8 +25,10 @@ def generate_image(width, height, frequencies, amplitudes, max_amp=70):
     amplitudes = amplitudes/max_amp * height
 
     for row in range(height):
+        b = row / height * 0.5
         for i in range(len(x) - 1):
-            image[row, x[i]:x[i+1]] = amplitudes[i] > height-row
+            r = 1 - i / (len(x) - 1)
+            image[row, x[i]:x[i+1]] = np.array([b, 0, r]) if amplitudes[i] > height-row else np.array([0, 0, 0])
     return image
 
 
