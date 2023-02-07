@@ -15,7 +15,7 @@ def bin_data(frequencies, amplitudes, n_bins=20):
     return frequencies[0::bid_width], np.mean(amplitudes, axis=1)
 
 
-def generate_image(background, frequencies, amplitudes, min_amp=-50, max_amp=30):
+def generate_image(background, frequencies, amplitudes, min_amp=0, max_amp=30):
     # Assume frequencies have been binned before this function
     width, height = background.shape[0], background.shape[1]
     image = background.copy()
@@ -31,7 +31,7 @@ def generate_image(background, frequencies, amplitudes, min_amp=-50, max_amp=30)
 
     for i in range(len(x) - 1):
         r = 200 * (1 - i / (len(x) - 1))
-        b = 255 * y[i] / height * 0.5
+        b = 255 * i / (len(x) - 1)
         image[y[i]:height + 1, x[i]:x[i+1]] = np.array([b, 0, r])
     return image
 
