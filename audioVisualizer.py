@@ -5,30 +5,34 @@ import cv2
 
 def bin_data(frequencies, amplitudes, n_bins=20):
     bid_width = -int(-len(amplitudes) / n_bins)
+
+    # pad the end of the array with the extra values to make reshape work
     if len(amplitudes) % bid_width != 0:
         pad_size = bid_width - amplitudes.shape[0] % bid_width
         amplitudes = np.pad(amplitudes, (0, pad_size), mode='constant')
-    new_shape = (amplitudes.shape[0] // bid_width, bid_width)
-    amplitudes = amplitudes.reshape(new_shape)
+
+    amplitudes = amplitudes.reshape((amplitudes.shape[0] // bid_width, bid_width))
     return frequencies[0::bid_width], np.mean(amplitudes, axis=1)
 
 
-def generate_image(width, height, frequencies, amplitudes, max_amp=30):
+def generate_image(background, frequencies, amplitudes, min_amp=-50, max_amp=30):
     # Assume frequencies have been binned before this function
-    image = np.zeros((height, width, 3))
+    width, height = background.shape[0], background.shape[1]
+    image = background.copy()
 
     bar_width = width / amplitudes.shape[0]
 
     x = (frequencies - min(frequencies)) / max(frequencies) * (width - bar_width)
-    x = x.astype(np.int)
+    x = x.astype(int)
     x = np.append(x, width)
-    amplitudes = amplitudes/max_amp * height
 
-    for row in range(height):
-        b = row / height * 0.5
-        for i in range(len(x) - 1):
-            r = 1 - i / (len(x) - 1)
-            image[row, x[i]:x[i+1]] = np.array([b, 0, r]) if amplitudes[i] > height-row else np.array([0, 0, 0])
+    y = (amplitudes-min_amp) / (max_amp-min_amp) * height
+    y = y.astype(int)
+
+    for i in range(len(x) - 1):
+        r = 200 * (1 - i / (len(x) - 1))
+        b = 255 * y[i] / height * 0.5
+        image[y[i]:height + 1, x[i]:x[i+1]] = np.array([b, 0, r])
     return image
 
 
@@ -37,18 +41,22 @@ def sample_to_data(audio, sample_rate):
     number_of_samples = fft_result.shape[0]
 
     frequencies = np.arange(number_of_samples) * sample_rate / number_of_samples
-    frequencies = frequencies[:number_of_samples // 2]
-    amplitudes = np.abs(fft_result[:number_of_samples // 2])
+
+    # Nyquist theorem states that the highest frequency that can be represented is 1/2 of the sampling frequency
+    frequencies = frequencies[frequencies <= sample_rate//2]
+    amplitudes = np.abs(fft_result[:len(frequencies)])
     amplitudes = librosa.amplitude_to_db(amplitudes, ref=1)
 
     return frequencies, amplitudes
 
 
-def main(file, fps):
+def main(file, fps, background):
     duration = 1/fps  # duration in seconds
 
     # Load audio file
     data, sample_rate = librosa.load(file)
+
+    image = cv2.imread(background)
 
     # Calculate the number of samples in one piece
     samples_per_piece = int(sample_rate * duration)
@@ -57,8 +65,8 @@ def main(file, fps):
     for i in range(0, len(data), samples_per_piece):
         audio_slice = data[i:i + samples_per_piece]
         frequencies, amplitudes, = sample_to_data(audio_slice, sample_rate)
-        frequencies, amplitudes = bin_data(frequencies, amplitudes)
-        frame = generate_image(1920, 1080, frequencies, amplitudes)
+        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=100)
+        frame = generate_image(image, frequencies, amplitudes)
 
         cv2.imshow('Frame', frame)
 
@@ -75,4 +83,4 @@ if __name__ == "__main__":
     # p = pstats.Stats('restats')
     # p.sort_stats('file').print_stats('audioVisualizer')
 
-    main("F:/Waves/Jung42.wav", 15)
+    main("F:/Waves/Jung42.wav", 60, 'Enso_Art.jpg')
