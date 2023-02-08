@@ -18,7 +18,7 @@ def bin_data(frequencies, amplitudes, n_bins=20):
 def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, mirror=False):
     # Assume frequencies have been binned before this function
     image = background.copy()
-    width, height = background.shape[0], background.shape[1]
+    width, height = background.shape[1], background.shape[0]
     if mirror in ['horizontal', 'both']:
         width /= 2
     if mirror in ['vertical', 'both']:
@@ -26,11 +26,14 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
 
     bar_width = width / amplitudes.shape[0]
 
-    x = (frequencies - min(frequencies)) / max(frequencies) * (width - bar_width)
+    x = (frequencies - min(frequencies)) / (max(frequencies) - min(frequencies)) * (width - bar_width)
     x = x.astype(int)
     x = np.append(x, width)
 
+
     y = np.clip((amplitudes-min_amp) / (max_amp-min_amp) * height, 0, height)
+    if y.sum() > 0:
+        print('here')
     y = y.astype(int)
 
     for i in range(len(x) - 1):
@@ -89,9 +92,9 @@ def main(file, fps, background, show=True):
             if cv2.waitKey(25) & 0xFF == ord('q'):
                 break
 
-        video_writer.write(frame)
-
-    video_writer.release()
+    #     video_writer.write(frame)
+    #
+    # video_writer.release()
 
 
 if __name__ == "__main__":
@@ -102,4 +105,4 @@ if __name__ == "__main__":
     # p = pstats.Stats('restats')
     # p.sort_stats('file').print_stats('audioVisualizer')
 
-    main("F:/Waves/Jung42.wav", 60, 'Enso_Art.jpg', show=True)
+    main("F:/Waves/Jung42.wav", 60, 'flowers.jpg', show=True)
