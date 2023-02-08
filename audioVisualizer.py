@@ -60,13 +60,18 @@ def sample_to_data(audio, sample_rate):
     return frequencies, amplitudes
 
 
-def main(file, fps, background):
+def main(file, fps, background, show=True):
     duration = 1/fps  # duration in seconds
 
     # Load audio file
     data, sample_rate = librosa.load(file)
 
     image = cv2.imread(background)
+
+    fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+
+    # Create a VideoWriter object to write the video
+    video_writer = cv2.VideoWriter("video.avi", fourcc, fps, (image.shape[1], image.shape[0]), isColor=True)
 
     # Calculate the number of samples in one piece
     samples_per_piece = int(sample_rate * duration)
@@ -75,14 +80,18 @@ def main(file, fps, background):
     for i in range(0, len(data), samples_per_piece):
         audio_slice = data[i:i + samples_per_piece]
         frequencies, amplitudes, = sample_to_data(audio_slice, sample_rate)
-        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=30)
+        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=5)
         frame = generate_image(image, frequencies, amplitudes)
 
-        cv2.imshow('Frame', frame)
+        if show:
+            cv2.imshow('Frame', frame)
+            # Press Q on keyboard to exit
+            if cv2.waitKey(25) & 0xFF == ord('q'):
+                break
 
-        # Press Q on keyboard to exit
-        if cv2.waitKey(25) & 0xFF == ord('q'):
-            break
+        video_writer.write(frame)
+
+    video_writer.release()
 
 
 if __name__ == "__main__":
@@ -93,4 +102,4 @@ if __name__ == "__main__":
     # p = pstats.Stats('restats')
     # p.sort_stats('file').print_stats('audioVisualizer')
 
-    main("F:/Waves/Jung42.wav", 60, 'Enso_Art.jpg')
+    main("F:/Waves/Jung42.wav", 60, 'Enso_Art.jpg', show=True)
