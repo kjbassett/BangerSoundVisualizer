@@ -15,10 +15,14 @@ def bin_data(frequencies, amplitudes, n_bins=20):
     return frequencies[0::bid_width], np.mean(amplitudes, axis=1)
 
 
-def generate_image(background, frequencies, amplitudes, min_amp=0, max_amp=30):
+def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, mirror=False):
     # Assume frequencies have been binned before this function
-    width, height = background.shape[0], background.shape[1]
     image = background.copy()
+    width, height = background.shape[0], background.shape[1]
+    if mirror in ['horizontal', 'both']:
+        width /= 2
+    if mirror in ['vertical', 'both']:
+        height /= 2
 
     bar_width = width / amplitudes.shape[0]
 
@@ -26,13 +30,19 @@ def generate_image(background, frequencies, amplitudes, min_amp=0, max_amp=30):
     x = x.astype(int)
     x = np.append(x, width)
 
-    y = (amplitudes-min_amp) / (max_amp-min_amp) * height
+    y = np.clip((amplitudes-min_amp) / (max_amp-min_amp) * height, 0, height)
     y = y.astype(int)
 
     for i in range(len(x) - 1):
         r = 200 * (1 - i / (len(x) - 1))
         b = 255 * i / (len(x) - 1)
-        image[y[i]:height + 1, x[i]:x[i+1]] = np.array([b, 0, r])
+        image[height - y[i]:height + 1, x[i]:x[i+1]] = np.array([b, 0, r])
+
+    if mirror in ['horizontal', 'both']:
+        image = np.concatenate([np.flip(image, axis=0), image], axis=0)
+    if mirror in ['vertical', 'both']:
+        image = np.concatenate([np.flip(image, axis=1), image], axis=1)
+
     return image
 
 
@@ -65,7 +75,7 @@ def main(file, fps, background):
     for i in range(0, len(data), samples_per_piece):
         audio_slice = data[i:i + samples_per_piece]
         frequencies, amplitudes, = sample_to_data(audio_slice, sample_rate)
-        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=100)
+        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=30)
         frame = generate_image(image, frequencies, amplitudes)
 
         cv2.imshow('Frame', frame)
