@@ -1,6 +1,7 @@
 import librosa
 import numpy as np
 import cv2
+from combine_av import combine
 
 
 def bin_data(frequencies, amplitudes, n_bins=20):
@@ -30,10 +31,7 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
     x = x.astype(int)
     x = np.append(x, width)
 
-
     y = np.clip((amplitudes-min_amp) / (max_amp-min_amp) * height, 0, height)
-    if y.sum() > 0:
-        print('here')
     y = y.astype(int)
 
     for i in range(len(x) - 1):
@@ -92,9 +90,11 @@ def main(file, fps, background, show=True):
             if cv2.waitKey(25) & 0xFF == ord('q'):
                 break
 
-    #     video_writer.write(frame)
-    #
-    # video_writer.release()
+        video_writer.write(frame)
+
+    video_writer.release()
+
+    combine("video.avi", file, 'yourSong.mp4')
 
 
 if __name__ == "__main__":
