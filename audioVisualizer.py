@@ -20,10 +20,6 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
     # Assume frequencies have been binned before this function
     image = background.copy()
     width, height = background.shape[1], background.shape[0]
-    if mirror in ['horizontal', 'both']:
-        width /= 2
-    if mirror in ['vertical', 'both']:
-        height /= 2
 
     bar_width = width / amplitudes.shape[0]
 
@@ -43,9 +39,9 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
 
     # Untested but potentially dope af
     if mirror in ['horizontal', 'both']:
-        image = np.concatenate([np.flip(image, axis=0), image], axis=0)
-    if mirror in ['vertical', 'both']:
         image = np.concatenate([np.flip(image, axis=1), image], axis=1)
+    if mirror in ['vertical', 'both']:
+        image = np.concatenate([image, np.flip(image, axis=0)], axis=0)
 
     return image
 
@@ -85,7 +81,7 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
         audio_slice = data[i:i + samples_per_piece]
         frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
         frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
-        frame = generate_image(image, frequencies, amplitudes)
+        frame = generate_image(image, frequencies, amplitudes, mirror=mirror)
 
         # Option to not show video during process in order to speed up writing to avi
         if show:
@@ -109,4 +105,4 @@ if __name__ == "__main__":
     # p = pstats.Stats('restats')
     # p.sort_stats('file').print_stats('audioVisualizer')
 
-    main("F:/Waves/Jung42.wav", 60, 'flowers.jpg', n_bins=30)
+    main("F:/Waves/Jung42.wav", 60, 'flowers.jpg', mirror='both', n_bins=30)
