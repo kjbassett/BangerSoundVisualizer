@@ -71,9 +71,7 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
 
     # Create a VideoWriter object to write the video
-    width = image.shape[1] * (2 if mirror in ['horizontal', 'both'] else 1)
-    height = image.shape[0] * (2 if mirror in ['vertical', 'both'] else 1)
-    video_writer = cv2.VideoWriter("video.avi", fourcc, fps, (width, height), isColor=True)
+    video_writer = cv2.VideoWriter("video.avi", fourcc, fps, (image.shape[1], image.shape[0]), isColor=True)
 
     # Calculate the number of samples in one piece
     samples_per_piece = int(sample_rate * duration)
