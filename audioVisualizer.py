@@ -27,6 +27,8 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
 
     bar_width = width / amplitudes.shape[0]
 
+    # Scale frequencies and ampliudes to x and y coordinates of top left corner of each bar on image
+    # subtract the bar width to allow last bar's width to display
     x = (frequencies - min(frequencies)) / (max(frequencies) - min(frequencies)) * (width - bar_width)
     x = x.astype(int)
     x = np.append(x, width)
@@ -39,6 +41,7 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
         b = 255 * i / (len(x) - 1)
         image[height - y[i]:height + 1, x[i]:x[i+1]] = np.array([b, 0, r])
 
+    # Untested but potentially dope af
     if mirror in ['horizontal', 'both']:
         image = np.concatenate([np.flip(image, axis=0), image], axis=0)
     if mirror in ['vertical', 'both']:
@@ -61,7 +64,7 @@ def sample_to_data(audio, sample_rate):
     return frequencies, amplitudes
 
 
-def main(file, fps, background, show=True):
+def main(file, fps, background, n_bins=20, mirror=False, show=True):
     duration = 1/fps  # duration in seconds
 
     # Load audio file
@@ -80,10 +83,11 @@ def main(file, fps, background, show=True):
     # Chop audio data into lengths of 1/fps for each frame of the video
     for i in range(0, len(data), samples_per_piece):
         audio_slice = data[i:i + samples_per_piece]
-        frequencies, amplitudes, = sample_to_data(audio_slice, sample_rate)
-        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=5)
+        frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
+        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
         frame = generate_image(image, frequencies, amplitudes)
 
+        # Option to not show video during process in order to speed up writing to avi
         if show:
             cv2.imshow('Frame', frame)
             # Press Q on keyboard to exit
@@ -105,4 +109,4 @@ if __name__ == "__main__":
     # p = pstats.Stats('restats')
     # p.sort_stats('file').print_stats('audioVisualizer')
 
-    main("F:/Waves/Jung42.wav", 60, 'flowers.jpg', show=True)
+    main("F:/Waves/Jung42.wav", 60, 'flowers.jpg', n_bins=30)
