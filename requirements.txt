@@ -1,0 +1,4 @@
+librosa
+numpy
+opencv-python
+moviepy

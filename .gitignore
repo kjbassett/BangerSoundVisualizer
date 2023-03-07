@@ -1,4 +1,8 @@
 
+# don't track render output
+output/
+
+
 restats
 
 # Byte-compiled / optimized / DLL files
@@ -130,3 +134,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# IDEA project files
+.idea/
+
+#VSCode workspaces
+*.code-workspace
