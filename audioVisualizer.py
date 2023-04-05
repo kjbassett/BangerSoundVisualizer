@@ -2,6 +2,7 @@ import librosa
 import numpy as np
 import cv2
 from combine_av import combine
+import argparse
 import os
 from tqdm import tqdm
 
@@ -83,7 +84,8 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
     for position in tqdm(range(0, len(data), samples_per_piece)):
         audio_slice = data[position:position + samples_per_piece]
         frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
-        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
+        if(n_bins > 0):
+            frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
         frame = generate_image(image, frequencies, amplitudes, mirror=mirror)
 
         # Option to not show video during process in order to speed up writing to avi
@@ -101,6 +103,19 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+                    prog='BangerSoundVisualizer',
+                    description='Renders a spectrum visualizer video in the style used by Bangersound\'s youtube channel')
+    parser.add_argument('input_audio', help='audio to user for generating the visualizer')
+    parser.add_argument('input_image', help='image to use as background. image size also sets video resolution')
+    parser.add_argument('--fps', type=int, default=60, help='framerate of the rendered video')
+    parser.add_argument('--mirror', default='none', help='options include: none, horizontal, vertical, both')
+    parser.add_argument('-b', '--bins', type=int, default=0, help='number of bins for spectrum; set to 0 for no binning')
+    parser.add_argument('-s', '--show', type=bool, default=False, help='show live output while rendering (for debugging)')
+    
+    
+
+    args = parser.parse_args()
     # import pstats
     # from pstats import SortKey
     # import cProfile
@@ -112,4 +127,4 @@ if __name__ == "__main__":
     if (not os.path.exists(outfolder)):
         os.mkdir(outfolder)
 
-    main("019_-_F0_letitfall.wav", 60, 'test_image_vis.png', mirror='both', n_bins=30, show=False)
+    main(args.input_audio, args.fps, args.input_image, mirror=args.mirror, n_bins=args.bins, show=args.show)
