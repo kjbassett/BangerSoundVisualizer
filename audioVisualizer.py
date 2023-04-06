@@ -2,6 +2,9 @@ import librosa
 import numpy as np
 import cv2
 from combine_av import combine
+import argparse
+import os
+from tqdm import tqdm
 
 
 def bin_data(frequencies, amplitudes, n_bins=20):
@@ -20,7 +23,6 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
     # Assume frequencies have been binned before this function
     image = background.copy()
     width, height = background.shape[1], background.shape[0]
-
     bar_width = width / amplitudes.shape[0]
 
     # Scale frequencies and ampliudes to x and y coordinates of top left corner of each bar on image
@@ -42,6 +44,8 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
         image = np.concatenate([np.flip(image, axis=1), image], axis=1)
     if mirror in ['vertical', 'both']:
         image = np.concatenate([image, np.flip(image, axis=0)], axis=0)
+
+    image = cv2.resize(image,(width,height),interpolation=cv2.INTER_AREA)
 
     return image
 
@@ -71,38 +75,56 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
 
     # Create a VideoWriter object to write the video
-    video_writer = cv2.VideoWriter("video.avi", fourcc, fps, (image.shape[1], image.shape[0]), isColor=True)
+    video_writer = cv2.VideoWriter(f"output/{file}-video.avi", fourcc, fps, (image.shape[1], image.shape[0]), isColor=True)
 
     # Calculate the number of samples in one piece
     samples_per_piece = int(sample_rate * duration)
 
     # Chop audio data into lengths of 1/fps for each frame of the video
-    for i in range(0, len(data), samples_per_piece):
-        audio_slice = data[i:i + samples_per_piece]
+    for position in tqdm(range(0, len(data), samples_per_piece)):
+        audio_slice = data[position:position + samples_per_piece]
         frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
-        frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
+        if(n_bins > 0):
+            frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
         frame = generate_image(image, frequencies, amplitudes, mirror=mirror)
 
         # Option to not show video during process in order to speed up writing to avi
         if show:
             cv2.imshow('Frame', frame)
             # Press Q on keyboard to exit
-            if cv2.waitKey(25) & 0xFF == ord('q'):
+            if cv2.waitKey(round(duration * 1000)) & 0xFF == ord('q'):
                 break
 
         video_writer.write(frame)
 
     video_writer.release()
 
-    combine("video.avi", file, 'yourSong.mp4')
+    combine(f"output/{file}-video.avi", file, f'output/{file}-visualizer.mp4')
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+                    prog='BangerSoundVisualizer',
+                    description='Renders a spectrum visualizer video in the style used by Bangersound\'s youtube channel')
+    parser.add_argument('input_audio', help='audio to user for generating the visualizer')
+    parser.add_argument('input_image', help='image to use as background. image size also sets video resolution')
+    parser.add_argument('--fps', type=int, default=60, help='framerate of the rendered video')
+    parser.add_argument('--mirror', default='none', help='options include: none, horizontal, vertical, both')
+    parser.add_argument('-b', '--bins', type=int, default=0, help='number of bins for spectrum; set to 0 for no binning')
+    parser.add_argument('-s', '--show', type=bool, default=False, help='show live output while rendering (for debugging)')
+    
+    
+
+    args = parser.parse_args()
     # import pstats
     # from pstats import SortKey
     # import cProfile
     # cProfile.run('main("F:/Waves/Jung42.wav", 15)', 'restats')
     # p = pstats.Stats('restats')
     # p.sort_stats('file').print_stats('audioVisualizer')
+    outfolder = f"output/"
 
-    main("F:/Waves/Jung42.wav", 60, 'flowers.jpg', mirror='both', n_bins=30)
+    if (not os.path.exists(outfolder)):
+        os.mkdir(outfolder)
+
+    main(args.input_audio, args.fps, args.input_image, mirror=args.mirror, n_bins=args.bins, show=args.show)

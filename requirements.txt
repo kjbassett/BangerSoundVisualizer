@@ -2,3 +2,4 @@ librosa
 numpy
 opencv-python
 moviepy
+tqdm
