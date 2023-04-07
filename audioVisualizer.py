@@ -75,7 +75,9 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
 
     # Create a VideoWriter object to write the video
-    video_writer = cv2.VideoWriter(f"output/{file}-video.avi", fourcc, fps, (image.shape[1], image.shape[0]), isColor=True)
+    audio_name = os.path.splitext(os.path.split(file)[1])[0]
+    video_path = f"output/{audio_name}-video.avi"
+    video_writer = cv2.VideoWriter(video_path, fourcc, fps, (image.shape[1], image.shape[0]), isColor=True)
 
     # Calculate the number of samples in one piece
     samples_per_piece = int(sample_rate * duration)
@@ -99,7 +101,7 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
 
     video_writer.release()
 
-    combine(f"output/{file}-video.avi", file, f'output/{file}-visualizer.mp4')
+    combine(video_path, file, f'output/{audio_name}-visualizer.mp4')
 
 
 if __name__ == "__main__":
