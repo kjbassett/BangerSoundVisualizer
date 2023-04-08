@@ -140,7 +140,7 @@ if __name__ == "__main__":
     parser.add_argument('--fft', type=int, default=512, help='fft resolution')
     parser.add_argument('--mirror', default='none', help='options include: none, horizontal, vertical, both')
     parser.add_argument('-b', '--bins', type=int, default=0, help='number of bins for spectrum; set to 0 for no binning')
-    parser.add_argument('-s', '--show', type=bool, default=False, help='show live output while rendering (for debugging)')
+    parser.add_argument('-s', '--show', action='store_true',  help='show live output while rendering (for debugging)')
     
     
 
