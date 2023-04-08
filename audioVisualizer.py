@@ -53,7 +53,9 @@ def generate_image(channel, background, frequencies, amplitudes, min_amp=-4, max
     return image, start, end
 
 
-def sample_to_data(audio, sample_rate):
+def sample_to_data(audio, sample_rate, window=True):
+    if window:
+        audio  = np.hanning(audio.shape[0]) * audio
     fft_result = np.fft.fft(audio)
     number_of_samples = fft_result.shape[0] // 2 # the second half of samples are a mirror of the first because of Nyquist
 
