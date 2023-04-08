@@ -69,6 +69,7 @@ def sample_to_data(audio, sample_rate):
 
 def main(file, fps, background, n_bins=20, fft_size=512, mirror=False, show=True):
     duration = 1/fps  # duration in seconds
+    half_fft_size = fft_size//2
 
     # Load audio file
     data, sample_rate = librosa.load(file, mono=False)
@@ -81,10 +82,10 @@ def main(file, fps, background, n_bins=20, fft_size=512, mirror=False, show=True
     
     image = cv2.imread(background)
 
-    if (n_bins > fft_size // 2):
-        print(f"reducing number of bins: {n_bins} to match fft size: {fft_size}.")
-        n_bins = fft_size
-    if (n_bins > image.shape[0] or fft_size // 2 > image.shape[0]):
+    if (n_bins > half_fft_size):
+        print(f"reducing number of bins: {n_bins} to half fft size: {fft_size}.")
+        n_bins = half_fft_size
+    if (n_bins > image.shape[0] or half_fft_size > image.shape[0]):
         print(f"fft size/bins too large for image height: {image.shape[0]}, reducing.")
         n_bins = image.shape[0]
 
@@ -97,15 +98,17 @@ def main(file, fps, background, n_bins=20, fft_size=512, mirror=False, show=True
 
     # Calculate the number of samples in one piece
     samples_per_piece = int(sample_rate * duration)
+    if (fft_size < samples_per_piece):
+        print(f"fft size {fft_size} is less than frame duration {samples_per_piece}. Some audio between frames will not be visualized.\nIncrease fft size or fps to avoid this issue.")
 
     center_pos = np.linspace(0,data.shape[1], total_frames, endpoint=False)
-    center_pos = (center_pos + samples_per_piece*.5+fft_size).astype(int)
-    data = np.pad(data,((0,0),(fft_size,fft_size)))
+    center_pos = (center_pos + samples_per_piece*.5+half_fft_size).astype(int)
+    data = np.pad(data,((0,0),(half_fft_size,half_fft_size)))
 
     # Chop audio data into lengths of 1/fps for each frame of the video
     for position in tqdm(center_pos):
         frame = np.empty_like(image)
-        for channel, audio_slice in enumerate(data[:,position - fft_size // 2:position + fft_size // 2]):
+        for channel, audio_slice in enumerate(data[:,position - half_fft_size:position + half_fft_size]):
             frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
             if(n_bins > 0):
                 frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
