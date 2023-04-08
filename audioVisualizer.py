@@ -40,7 +40,7 @@ def generate_image(channel, background, frequencies, amplitudes, min_amp=-4, max
     for i in range(len(y) - 1):
         r = 200 * (1 - i / (len(y) - 1))
         b = 255 * i / (len(y) - 1)
-        image[y[i+1]:y[i],half_width*(1-channel) - (1-2*channel)*x[i]:half_width*(1-channel):(1-2*channel)] = np.array([b, 0, r])
+        image[y[i+1]:y[i],(1-channel)*(half_width - x[i]):half_width*(1-channel) + x[i]*channel] = np.array([b, 0, r])
 
     # Untested but potentially dope af
     if mirror in ['horizontal', 'both']:
