@@ -22,25 +22,27 @@ def bin_data(frequencies, amplitudes, n_bins=20):
 def generate_image(channel, background, frequencies, amplitudes, min_amp=-4, max_amp=20, mirror=False):
     # Assume frequencies have been binned before this function
     width, height = background.shape[1], background.shape[0]
-    half_width = width//2
+    half_width = width // 2
     start, end = (0, half_width) if channel == 0 else (half_width, width)
-    image = background.copy()[:,start:end]
+    image = background.copy()[:, start:end]
 
     bar_height = height / amplitudes.shape[0]
 
-    # Scale frequencies and ampliudes to y and x coordinates of top left corner of each bar on image
+    # Scale frequencies and amplitudes to y and x coordinates of top left corner of each bar on image
     # subtract the bar height to allow last bar's height to display
     y = height - ((frequencies - min(frequencies)) / (max(frequencies) - min(frequencies)) * (height - bar_height))
     y = y.astype(int)
     y = np.append(y, half_width)
 
-    x = np.clip(((amplitudes-min_amp) / (max_amp-min_amp) * half_width), 0, half_width)
+    x = np.clip(((amplitudes - min_amp) / (max_amp - min_amp) * half_width), 0, half_width)
     x = x.astype(int)
 
     for i in range(len(y) - 1):
         r = 200 * (1 - i / (len(y) - 1))
         b = 255 * i / (len(y) - 1)
-        image[y[i+1]:y[i],(1-channel)*(half_width - x[i]):half_width*(1-channel) + x[i]*channel] = np.array([b, 0, r])
+        image[
+            y[i + 1]: y[i], (1 - channel) * (half_width - x[i]): half_width * (1 - channel) + x[i] * channel
+        ] = np.array([b, 0, r])
 
     # Untested but potentially dope af
     if mirror in ['horizontal', 'both']:
@@ -48,7 +50,7 @@ def generate_image(channel, background, frequencies, amplitudes, min_amp=-4, max
     if mirror in ['vertical', 'both']:
         image = np.concatenate([image, np.flip(image, axis=0)], axis=0)
 
-    image = cv2.resize(image,(half_width,height),interpolation=cv2.INTER_AREA)
+    image = cv2.resize(image, (half_width, height), interpolation=cv2.INTER_AREA)
 
     return image, start, end
 
@@ -60,7 +62,7 @@ def sample_to_data(audio, sample_rate):
     frequencies = np.arange(number_of_samples) * sample_rate / number_of_samples
 
     # Nyquist theorem states that the highest frequency that can be represented is 1/2 of the sampling frequency
-    frequencies = frequencies[frequencies <= sample_rate//2]
+    frequencies = frequencies[frequencies <= sample_rate // 2]
     amplitudes = np.abs(fft_result[:len(frequencies)])
     amplitudes = librosa.amplitude_to_db(amplitudes, ref=1)
 
@@ -68,16 +70,15 @@ def sample_to_data(audio, sample_rate):
 
 
 def main(file, fps, background, n_bins=20, mirror=False, show=True):
-    duration = 1/fps  # duration in seconds
+    duration = 1 / fps  # duration in seconds
 
     # Load audio file
     data, sample_rate = librosa.load(file, mono=False)
 
-    if data.ndim == 1: # force mono inputs to stereo by copying the channel
-        data = np.tile(data,[2,1])
+    if data.ndim == 1:  # force mono inputs to stereo by copying the channel
+        data = np.tile(data, [2, 1])
 
     image = cv2.imread(background)
-
 
     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
 
@@ -92,13 +93,13 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
     # Chop audio data into lengths of 1/fps for each frame of the video
     for position in tqdm(range(0, data.shape[1], samples_per_piece)):
         frame = np.empty_like(image)
-        for channel, audio_slice in enumerate(data[:,position:position + samples_per_piece]):
+        for channel, audio_slice in enumerate(data[:, position:position + samples_per_piece]):
             frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
-            if(n_bins > 0):
+            if n_bins > 0:
                 frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
             channel_frame, start, end = generate_image(channel, image, frequencies, amplitudes, mirror=mirror)
-            
-            frame[:,start:end] = channel_frame
+
+            frame[:, start:end] = channel_frame
 
         # Option to not show video during process in order to speed up writing to avi
         if show:
@@ -116,16 +117,17 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-                    prog='BangerSoundVisualizer',
-                    description='Renders a spectrum visualizer video in the style used by Bangersound\'s youtube channel')
+        prog='BangerSoundVisualizer',
+        description='Renders a spectrum visualizer video in the style used by BangerSound\'s youtube channel')
     parser.add_argument('input_audio', help='audio to user for generating the visualizer')
     parser.add_argument('input_image', help='image to use as background. image size also sets video resolution')
     parser.add_argument('--fps', type=int, default=60, help='framerate of the rendered video')
     parser.add_argument('--mirror', default='none', help='options include: none, horizontal, vertical, both')
-    parser.add_argument('-b', '--bins', type=int, default=0, help='number of bins for spectrum; set to 0 for no binning')
-    parser.add_argument('-s', '--show', type=bool, default=False, help='show live output while rendering (for debugging)')
-    
-    
+    parser.add_argument('-b', '--bins', type=int, default=0,
+                        help='number of bins for spectrum; set to 0 for no binning')
+    parser.add_argument('-s', '--show', type=bool, default=False,
+                        help='show live output while rendering (for debugging)')
+    parser.add_argument()
 
     args = parser.parse_args()
     # import pstats
@@ -134,9 +136,9 @@ if __name__ == "__main__":
     # cProfile.run('main("F:/Waves/Jung42.wav", 15)', 'restats')
     # p = pstats.Stats('restats')
     # p.sort_stats('file').print_stats('audioVisualizer')
-    outfolder = f"output/"
+    out_folder = f"output/"
 
-    if (not os.path.exists(outfolder)):
-        os.mkdir(outfolder)
+    if not os.path.exists(out_folder):
+        os.mkdir(out_folder)
 
     main(args.input_audio, args.fps, args.input_image, mirror=args.mirror, n_bins=args.bins, show=args.show)
