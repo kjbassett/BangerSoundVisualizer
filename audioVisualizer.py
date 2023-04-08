@@ -19,25 +19,28 @@ def bin_data(frequencies, amplitudes, n_bins=20):
     return frequencies[0::bid_width], np.mean(amplitudes, axis=1)
 
 
-def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, mirror=False):
+def generate_image(channel, background, frequencies, amplitudes, min_amp=-4, max_amp=20, mirror=False):
     # Assume frequencies have been binned before this function
-    image = background.copy()
     width, height = background.shape[1], background.shape[0]
-    bar_width = width / amplitudes.shape[0]
+    half_width = width//2
+    start, end = (0, half_width) if channel == 0 else (half_width, width)
+    image = background.copy()[:,start:end]
 
-    # Scale frequencies and ampliudes to x and y coordinates of top left corner of each bar on image
-    # subtract the bar width to allow last bar's width to display
-    x = (frequencies - min(frequencies)) / (max(frequencies) - min(frequencies)) * (width - bar_width)
-    x = x.astype(int)
-    x = np.append(x, width)
+    bar_height = height / amplitudes.shape[0]
 
-    y = np.clip((amplitudes-min_amp) / (max_amp-min_amp) * height, 0, height)
+    # Scale frequencies and ampliudes to y and x coordinates of top left corner of each bar on image
+    # subtract the bar height to allow last bar's height to display
+    y = height - ((frequencies - min(frequencies)) / (max(frequencies) - min(frequencies)) * (height - bar_height))
     y = y.astype(int)
+    y = np.append(y, half_width)
 
-    for i in range(len(x) - 1):
-        r = 200 * (1 - i / (len(x) - 1))
-        b = 255 * i / (len(x) - 1)
-        image[height - y[i]:height + 1, x[i]:x[i+1]] = np.array([b, 0, r])
+    x = np.clip(((amplitudes-min_amp) / (max_amp-min_amp) * half_width), 0, half_width)
+    x = x.astype(int)
+
+    for i in range(len(y) - 1):
+        r = 200 * (1 - i / (len(y) - 1))
+        b = 255 * i / (len(y) - 1)
+        image[y[i+1]:y[i],half_width*(1-channel) - (1-2*channel)*x[i]:half_width*(1-channel):(1-2*channel)] = np.array([b, 0, r])
 
     # Untested but potentially dope af
     if mirror in ['horizontal', 'both']:
@@ -45,9 +48,9 @@ def generate_image(background, frequencies, amplitudes, min_amp=-4, max_amp=20, 
     if mirror in ['vertical', 'both']:
         image = np.concatenate([image, np.flip(image, axis=0)], axis=0)
 
-    image = cv2.resize(image,(width,height),interpolation=cv2.INTER_AREA)
+    image = cv2.resize(image,(half_width,height),interpolation=cv2.INTER_AREA)
 
-    return image
+    return image, start, end
 
 
 def sample_to_data(audio, sample_rate):
@@ -68,9 +71,13 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
     duration = 1/fps  # duration in seconds
 
     # Load audio file
-    data, sample_rate = librosa.load(file)
+    data, sample_rate = librosa.load(file, mono=False)
+
+    if data.ndim == 1: # force mono inputs to stereo by copying the channel
+        data = np.tile(data,[2,1])
 
     image = cv2.imread(background)
+
 
     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
 
@@ -81,12 +88,15 @@ def main(file, fps, background, n_bins=20, mirror=False, show=True):
     samples_per_piece = int(sample_rate * duration)
 
     # Chop audio data into lengths of 1/fps for each frame of the video
-    for position in tqdm(range(0, len(data), samples_per_piece)):
-        audio_slice = data[position:position + samples_per_piece]
-        frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
-        if(n_bins > 0):
-            frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
-        frame = generate_image(image, frequencies, amplitudes, mirror=mirror)
+    for position in tqdm(range(0, data.shape[1], samples_per_piece)):
+        frame = np.empty_like(image)
+        for channel, audio_slice in enumerate(data[:,position:position + samples_per_piece]):
+            frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
+            if(n_bins > 0):
+                frequencies, amplitudes = bin_data(frequencies, amplitudes, n_bins=n_bins)
+            channel_frame, start, end = generate_image(channel, image, frequencies, amplitudes, mirror=mirror)
+            
+            frame[:,start:end] = channel_frame
 
         # Option to not show video during process in order to speed up writing to avi
         if show:
