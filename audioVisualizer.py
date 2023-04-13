@@ -32,7 +32,7 @@ def smooth_curve(x, y):
     return x_smooth, y_smooth
 
 
-def generate_image(channel, background, frequencies, amplitudes, min_amp=-100, max_amp=100):
+def generate_image(channel, background, frequencies, amplitudes, min_amp=-30, max_amp=30):
     # Assume frequencies have been binned before this function
     width, height = background.shape[1], background.shape[0]
     half_width = width // 2
@@ -42,9 +42,9 @@ def generate_image(channel, background, frequencies, amplitudes, min_amp=-100, m
     x, y = data_to_coords(frequencies, amplitudes, image.shape[0], min_amp, max_amp)
 
     # This will be the part that is abstracted out to allow different styling
-    y, x = smooth_curve(y, x)
+    #y, x = smooth_curve(y, x)
 
-    x = x.astype(int)
+    x = np.clip(x.astype(int), 0, half_width)
     y = y.astype(int)
 
     for i in range(len(y) - 1):
@@ -90,8 +90,7 @@ def data_to_coords(frequencies, amplitudes, height, min_amp, max_amp):
     # TODO Must be a smarter way than using ref=100 and clipping. Find max of track before generating video?
     data['x'] = librosa.amplitude_to_db(data['x'], ref=100)
 
-    data['x'] = np.clip(((data['x'] - min_amp) / (max_amp - min_amp) * height), 0, height)
-    print(min(data['x']), max(data['x']), min(data['y']), max(data['y']))
+    data['x'] = ((data['x'] - min_amp) / (max_amp - min_amp) * height)
 
     return data['x'], data['y']
 
