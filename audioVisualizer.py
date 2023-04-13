@@ -42,7 +42,7 @@ def generate_image(channel, background, frequencies, amplitudes, min_amp=-30, ma
     x, y = data_to_coords(frequencies, amplitudes, image.shape[0], min_amp, max_amp)
 
     # This will be the part that is abstracted out to allow different styling
-    #y, x = smooth_curve(y, x)
+    y, x = smooth_curve(y, x)
 
     x = np.clip(x.astype(int), 0, half_width)
     y = y.astype(int)
