@@ -1,6 +1,9 @@
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 
+# stop moviepy from stealing warnings https://github.com/Zulko/moviepy/issues/1191
+import logging
+logging.captureWarnings(False)
 
 def combine(video_path, audio_path, output_name):
     # Load the video file

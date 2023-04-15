@@ -80,7 +80,7 @@ def data_to_coords(frequencies, amplitudes, height, min_amp, max_amp):
     # TODO move freq to pixel outside of function since it will always be the same. Don't calc multiple times
     data = pd.DataFrame({
         'x': amplitudes,
-        'y': np.round((np.log10(frequencies) - log_min_freq) * scale_factor).astype(int)
+        'y': np.round((np.log10(frequencies, where=frequencies > 1) - log_min_freq) * scale_factor).astype(int)
     })
     data.drop(index=data.index[0], axis=0, inplace=True)  # 0 frequency -> -inf y value
     data = data.groupby('y').max()
