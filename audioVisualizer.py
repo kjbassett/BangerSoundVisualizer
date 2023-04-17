@@ -32,14 +32,12 @@ def smooth_curve(x, y):
     return x_smooth, y_smooth
 
 
-def generate_image(channel, background, frequencies, amplitudes, min_amp=-30, max_amp=30):
+def generate_image(channel, background, x, y):
     # Assume frequencies have been binned before this function
     width, height = background.shape[1], background.shape[0]
     half_width = width // 2
     start, end = (0, half_width) if channel == 0 else (half_width, width)
     image = background.copy()[:, start:end]
-
-    x, y = data_to_coords(frequencies, amplitudes, image.shape[0], min_amp, max_amp)
 
     # This will be the part that is abstracted out to allow different styling
     y, x = smooth_curve(y, x)
@@ -59,54 +57,52 @@ def generate_image(channel, background, frequencies, amplitudes, min_amp=-30, ma
     return image, start, end
 
 
-def sample_to_data(audio, sample_rate, window=True):
+def sample_to_amplitudes(audio, samples_per_frame, window=True):
     if window:
-        audio  = np.hanning(audio.shape[0]) * audio
+        audio = np.hanning(audio.shape[0]) * audio
     fft_result = np.fft.fft(audio)
-    number_of_samples = fft_result.shape[0] // 2 # the second half of samples are a mirror of the first because of Nyquist
-
-    frequencies = np.arange(number_of_samples) * sample_rate / number_of_samples
-    amplitudes = np.abs(fft_result[:len(frequencies)])
-
-    return frequencies, amplitudes
+    amplitudes = np.abs(fft_result[:samples_per_frame])
+    return amplitudes
 
 
-def data_to_coords(frequencies, amplitudes, height, min_amp, max_amp):
-    # translate frequencies to y coordinates and amplitudes to x coordinates
+def amplitudes_to_coords_generator(frequencies, height, min_amp, max_amp):
+    # We don't need to calculate all this code every time.
     log_min_freq = np.log10(20)  # Lowest frequency a human can hear
     log_max_freq = np.log10(max(frequencies))  # 22050?
     scale_factor = height / (log_max_freq - log_min_freq)
+    y = np.round((np.log10(frequencies) - log_min_freq) * scale_factor).astype(int)
+    amp_scale = height / (max_amp - min_amp)
 
-    # TODO move freq to pixel outside of function since it will always be the same. Don't calc multiple times
-    data = pd.DataFrame({
-        'x': amplitudes,
-        'y': np.round((np.log10(frequencies) - log_min_freq) * scale_factor).astype(int)
-    })
-    data.drop(index=data.index[0], axis=0, inplace=True)  # 0 frequency -> -inf y value
-    data = data.groupby('y').max()
-    data.reset_index(inplace=True)
-    data = data.rename(columns={'index': 'y'})
-    # TODO Must be a smarter way than using ref=100 and clipping. Find max of track before generating video?
-    data['x'] = librosa.amplitude_to_db(data['x'], ref=100)
+    def data_to_coords(amplitudes):
+        data = pd.DataFrame({
+            'x': amplitudes,
+            'y': y
+        })
+        data.drop(index=data.index[0], axis=0, inplace=True)  # 0 frequency -> -inf y value
+        data = data.groupby('y').max()
+        data.reset_index(inplace=True)
+        data = data.rename(columns={'index': 'y'})
+        data['x'] = librosa.amplitude_to_db(data['x'], ref=100)
+        data['x'] = (data['x'] - min_amp) * amp_scale
 
-    data['x'] = ((data['x'] - min_amp) / (max_amp - min_amp) * height)
+        return data['x'], data['y']
 
-    return data['x'], data['y']
+    return data_to_coords
 
 
 def main(file, fps, background, n_bins=20, fft_size=512, show=True):
     duration = 1/fps  # duration in seconds
     half_fft_size = fft_size//2
 
-
     # Load audio file
     data, sample_rate = librosa.load(file, mono=False)
 
-    if data.ndim == 1:  # force mono inputs to stereo by copying the channel
+    # force mono inputs to stereo by copying the channel
+    if data.ndim == 1:
         data = np.tile(data, [2, 1])
 
     total_frames = round(data.shape[1] / sample_rate * fps + 0.5)
-    data = np.pad(data,((0,0),(0,total_frames * sample_rate // fps - data.shape[1])))
+    data = np.pad(data, ((0, 0), (0, total_frames * sample_rate // fps - data.shape[1])))
     
     image = cv2.imread(background)
 
@@ -127,18 +123,27 @@ def main(file, fps, background, n_bins=20, fft_size=512, show=True):
     # Calculate the number of samples in one piece
     samples_per_piece = int(sample_rate * duration)
     if (fft_size < samples_per_piece):
-        print(f"fft size {fft_size} is less than frame duration {samples_per_piece}. Some audio between frames will not be visualized.\nIncrease fft size or fps to avoid this issue.")
+        print(f"fft size {fft_size} is less than frame duration {samples_per_piece}.")
+        print("Some audio between frames will not be visualized.")
+        print("Increase fft size or fps to avoid this issue.")
 
-    center_pos = np.linspace(0,data.shape[1], total_frames, endpoint=False)
-    center_pos = (center_pos + samples_per_piece*.5+half_fft_size).astype(int)
-    data = np.pad(data,((0,0),(half_fft_size,half_fft_size)))
+    # Sample half_fft_size from in front and behind the time of the frame, so align center points and pad audio
+    center_pos = np.linspace(0, data.shape[1], total_frames, endpoint=False)
+    center_pos = (center_pos + samples_per_piece * 0.5 + half_fft_size).astype(int)
+    data = np.pad(data, ((0, 0), (half_fft_size, half_fft_size)))
+
+    frequencies = np.arange(half_fft_size) * sample_rate / half_fft_size
+
+    # Create generators
+    amplitudes_to_coords = amplitudes_to_coords_generator(frequencies, image.shape[0], -30, 30)
 
     # Chop audio data into lengths of 1/fps for each frame of the video
     for position in tqdm(center_pos):
         frame = np.empty_like(image)
-        for channel, audio_slice in enumerate(data[:,position - half_fft_size:position + half_fft_size]):
-            frequencies, amplitudes = sample_to_data(audio_slice, sample_rate)
-            channel_frame, start, end = generate_image(channel, image, frequencies, amplitudes)
+        for channel, audio_slice in enumerate(data[:, position - half_fft_size:position + half_fft_size]):
+            amplitudes = sample_to_amplitudes(audio_slice, half_fft_size)
+            x, y = amplitudes_to_coords(amplitudes)
+            channel_frame, start, end = generate_image(channel, image, x, y)
             frame[:, start:end] = channel_frame
         # Option to not show video during process in order to speed up writing to avi
         if show:
