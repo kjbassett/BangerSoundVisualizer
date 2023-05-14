@@ -23,14 +23,13 @@ def bin_data(frequencies, amplitudes, n_bins=20):
 
 def smooth_curve(x, y):
     # Assume x = frequencies and y = 2xn array of amplitudes
-    y[0] = [0, 0]
+    y[:, 0] = [0, 0]
     # cubic spline interpolation
-    spline0 = splrep(x, y[:, 0])
-    spline1 = splrep(x, y[:, 1])
-    x_smooth = np.linspace(0, x.max(), x.max() + 1)  # Todo put this in a generator
-    y0_smooth = splev(x_smooth, spline0)
-    y1_smooth = splev(x_smooth, spline1)
-    return x_smooth, y0_smooth, y1_smooth
+    spline0 = splrep(x, y[0])
+    spline1 = splrep(x, y[1])
+    x = np.linspace(0, x.max(), x.max() + 1)  # Todo put this in a generator
+    y = np.array([splev(x, spline0), splev(x, spline1)])
+    return x, y
 
 
 def samples_to_amplitudes(samples, window=True):
@@ -41,70 +40,95 @@ def samples_to_amplitudes(samples, window=True):
     return amplitudes
 
 
-def amplitudes_to_coords_generator(frequencies, height, width, min_db, max_db):
+def amplitudes_to_coords_generator(frequencies,
+                                   height,
+                                   width,
+                                   min_db,
+                                   max_db,
+                                   transform_func=smooth_curve,
+                                   vertical=False
+                                   ):
     log_min_freq = np.log10(20)  # Lowest frequency a human can hear
     log_max_freq = np.log10(max(frequencies))  # 22050?
-    y_scale_factor = height / (log_max_freq - log_min_freq)
-    y = np.round((np.log10(frequencies) - log_min_freq) * y_scale_factor).astype(int)
-    y = np.clip(y, 0, height)
+
+    if vertical:
+        width, height = height, width
+
+    # All code below assumes frequencies -> x and amplitudes -> y
+    freq_scale_factor = width / (log_max_freq - log_min_freq)
+    frequencies = np.round((np.log10(frequencies) - log_min_freq) * freq_scale_factor).astype(int)
+    frequencies = np.clip(frequencies, 0, width)
 
     # numpy version of pandas groupby
-    unique_group_ids, group_positions = np.unique(y, return_index=True)
-    half_width = width // 2
-    x_scale_factor = width / (max_db - min_db) // 2
+    unique_group_ids, group_positions = np.unique(frequencies, return_index=True)
+    half_height = height // 2
+    amp_scale_factor = height / (max_db - min_db) // 2
 
     def amplitudes_to_coords(amplitudes):
         groups = np.split(amplitudes, group_positions[1:], axis=1)  # gpt had [1:] after both args. Doesn't seem right
-        group_max = np.array([[group[0].max(), group[1].max()] for group in groups])
+        group_max = np.array([[group[0].max(), group[1].max()] for group in groups]).T
 
         coords = librosa.amplitude_to_db(group_max, ref=0)
 
-        #  TODO move scaling and reflecting across axis to coords_to_image
-        coords = np.clip((coords - min_db) * x_scale_factor, 0, half_width)
-        coords[:, 0] *= -1
-        coords += half_width
+        coords = (coords - min_db) * amp_scale_factor
 
-        # noinspection PyArgumentList
-        # (coords.min(), coords.max())
+        x, y = transform_func(unique_group_ids, coords)
 
-        return coords
+        y[0] *= -1
+        y += half_height
 
-    return unique_group_ids, amplitudes_to_coords
+        return x, y
+
+    return amplitudes_to_coords
 
 
-def coords_to_image_generator(image, y_coords, transform_func=smooth_curve):
+def coords_to_image_generator(image, vertical=False):
     width = image.shape[1]
     height = image.shape[0]
 
-    # This will be abstracted out to allow different styling
-    r = 200 * (1 - np.arange(height) / (height - 1))
-    g = 0
-    b = 255 * np.arange(height) / (height - 1)
+    if vertical:
+        # This will be abstracted out to allow different styling
+        r = 200 * (1 - np.arange(height) / (height - 1))
+        g = 0
+        b = 255 * np.arange(height) / (height - 1)
 
-    def transform(coords): #  Todo move this into coords generator or its own thing
-        # x and y switched here to get bangersound visualizer working. TODO make orientation a setting for main()
+        def coords_to_image(x, y):
+            # expects y to be 2xn, one for each channel
+            im = image.copy()
+            x = np.clip(x.astype(int), 0, height)
+            y = np.clip(y.astype(int), 0, width)
+            for i in range(len(x) - 1):
+                im[
+                    x[i]: x[i + 1],
+                    y[0, i]: y[1, i]
+                ] = np.array([b[i], g, r[i]])
+            # image = cv2.resize(image, (half_width, height), interpolation=cv2.INTER_AREA)
+            return im
 
-        y, x0, x1 = transform_func(y_coords, coords)  # Todo change these variable names and clipping after orientation setting
-        x0 = np.clip(x0.astype(int), 0, width)
-        x1 = np.clip(x1.astype(int), 0, width)
-        y = np.clip(y.astype(int), 0, height)
-        return x0, x1, y
+    else:
+        # This will be abstracted out to allow different styling
+        r = 200 * (1 - np.arange(width) / (width - 1))
+        g = 0
+        b = 255 * np.arange(width) / (width - 1)
 
-    def coords_to_image(coords):
-        im = image.copy()
-        x0, x1, y = transform(coords)
-        for i in range(len(y) - 1):
-            im[
-                y[i]: y[i + 1],
-                x0[i]: x1[i]
-            ] = np.array([b[i], g, r[i]])
-        # image = cv2.resize(image, (half_width, height), interpolation=cv2.INTER_AREA)
-        return im
+        def coords_to_image(x, y):
+            # expects y to be 2xn, one for each channel
+            im = image.copy()
+            x = np.clip(x.astype(int), 0, width)
+            y = np.clip(y.astype(int), 0, height)
+            for i in range(len(x) - 1):
+                im[
+                    y[0, i]: y[1, i],
+                    x[i]: x[i + 1]
+                ] = np.array([b[i], g, r[i]])
+            # image = cv2.resize(image, (half_width, height), interpolation=cv2.INTER_AREA)
+            return im
 
     return coords_to_image
 
 
-def main(file, fps, background, n_bins=20, fft_size=512, show=True):
+def main(file, background, vertical=False, n_bins=20, fps=60, fft_size=512, show=True):
+    print(vertical)
     duration = 1/fps  # duration in seconds
     half_fft_size = fft_size//2
 
@@ -123,7 +147,7 @@ def main(file, fps, background, n_bins=20, fft_size=512, show=True):
     if n_bins > half_fft_size:
         print(f"reducing number of bins: {n_bins} to half fft size: {fft_size}.")
         n_bins = half_fft_size
-    if (n_bins > image.shape[0] or half_fft_size > image.shape[0]):
+    if n_bins > image.shape[0] or half_fft_size > image.shape[0]:
         print(f"fft size/bins too large for image height: {image.shape[0]}, reducing.")
         n_bins = image.shape[0]
 
@@ -150,15 +174,20 @@ def main(file, fps, background, n_bins=20, fft_size=512, show=True):
     frequencies = np.arange(half_fft_size) * sample_rate / half_fft_size
 
     # Create generators
-    y, amplitudes_to_coords = amplitudes_to_coords_generator(frequencies, image.shape[0], image.shape[1], 50, 120)
-    coords_to_image = coords_to_image_generator(image, y)
+    amplitudes_to_coords = amplitudes_to_coords_generator(frequencies,
+                                                          image.shape[0],
+                                                          image.shape[1],
+                                                          80,
+                                                          140,
+                                                          vertical=vertical)
+    coords_to_image = coords_to_image_generator(image, vertical=vertical)
 
     # Chop audio data into lengths of 1/fps for each frame of the video
     for position in tqdm(center_pos):
         samples = data[:, position - half_fft_size:position + half_fft_size]
         amplitudes = samples_to_amplitudes(samples)
-        xs = amplitudes_to_coords(amplitudes)
-        frame = coords_to_image(xs)  # todo Calc y before all dis
+        x, y = amplitudes_to_coords(amplitudes)
+        frame = coords_to_image(x, y)
         # Option to not show video during process in order to speed up writing to avi
         if show:
             cv2.imshow('Frame', frame)
@@ -179,21 +208,22 @@ if __name__ == "__main__":
         description='Renders a spectrum visualizer video in the style used by BangerSound\'s youtube channel')
     parser.add_argument('input_audio', help='audio to user for generating the visualizer')
     parser.add_argument('input_image', help='image to use as background. image size also sets video resolution')
+    parser.add_argument('--vertical', action='store_true', default=False, help='True or False, display visualizer vertically')
     parser.add_argument('--fps', type=int, default=60, help='framerate of the rendered video')
     parser.add_argument('--fft', type=int, default=512, help='fft resolution')
     parser.add_argument('-b', '--bins', type=int, default=0, help='number of bins for spectrum; 0 for no binning')
     parser.add_argument('-s', '--show', action='store_true',  help='show live output while rendering (for debugging)')
 
     args = parser.parse_args()
-    # import pstats
-    # from pstats import SortKey
-    # import cProfile
-    # cProfile.run('main("F:/Waves/Jung42.wav", 15)', 'restats')
-    # p = pstats.Stats('restats')
-    # p.sort_stats('file').print_stats('audioVisualizer')
     out_folder = f"output/"
 
     if not os.path.exists(out_folder):
         os.mkdir(out_folder)
 
-    main(args.input_audio, args.fps, args.input_image, fft_size=args.fft, n_bins=args.bins, show=args.show)
+    main(args.input_audio,
+         args.input_image,
+         vertical=args.vertical,
+         fps=args.fps,
+         fft_size=args.fft,
+         n_bins=args.bins,
+         show=args.show)
