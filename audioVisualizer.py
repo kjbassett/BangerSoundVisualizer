@@ -22,11 +22,12 @@ def bin_data(frequencies, amplitudes, n_bins=20):
 
 
 def smooth_curve(x, y):
+    # Use cubic spline interpolation to create a smooth curve
     # Assume x = frequencies and y = 2xn array of amplitudes
     y[:, 0] = [0, 0]
     # cubic spline interpolation
-    spline0 = splrep(x, y[0])
-    spline1 = splrep(x, y[1])
+    spline0 = splrep(x, y[0])  # Channel 0
+    spline1 = splrep(x, y[1])  # Channel 1
     x = np.linspace(0, x.max(), x.max() + 1)  # Todo put this in a generator
     y = np.array([splev(x, spline0), splev(x, spline1)])
     return x, y
@@ -48,25 +49,29 @@ def amplitudes_to_coords_generator(frequencies,
                                    transform_func=smooth_curve,
                                    vertical=False
                                    ):
+    # TODO Convert this to a generator with yield
+    # Generate a function that maps frequencies and amplitudes to screen coordinates
     log_min_freq = np.log10(20)  # Lowest frequency a human can hear
     log_max_freq = np.log10(max(frequencies))  # 22050?
 
     if vertical:
         width, height = height, width
 
-    # All code below assumes frequencies -> x and amplitudes -> y
+    # Scale frequencies to fit on the x-axis
     freq_scale_factor = width / (log_max_freq - log_min_freq)
     frequencies = np.round((np.log10(frequencies) - log_min_freq) * freq_scale_factor).astype(int)
     frequencies = np.clip(frequencies, 0, width)
 
+    # Group frequencies into bins
     # numpy version of pandas groupby
     unique_group_ids, group_positions = np.unique(frequencies, return_index=True)
     half_height = height // 2
     amp_scale_factor = height / (max_db - min_db) // 2
 
     def amplitudes_to_coords(amplitudes):
+        # Aggregate amplitudes according to frequency groups
         groups = np.split(amplitudes, group_positions[1:], axis=1)  # gpt had [1:] after both args. Doesn't seem right
-        group_max = np.array([[group[0].max(), group[1].max()] for group in groups]).T
+        group_max = np.array([[group[0].mean(), group[1].mean()] for group in groups]).T
 
         coords = librosa.amplitude_to_db(group_max, ref=0)
 
@@ -74,6 +79,7 @@ def amplitudes_to_coords_generator(frequencies,
 
         x, y = transform_func(unique_group_ids, coords)
 
+        # Flip channel 0 and center both channels
         y[0] *= -1
         y += half_height
 
@@ -83,6 +89,8 @@ def amplitudes_to_coords_generator(frequencies,
 
 
 def coords_to_image_generator(image, vertical=False):
+    # Generate a function that maps screen coordinates to an image
+    # TODO make this a generator with yield
     width = image.shape[1]
     height = image.shape[0]
 
@@ -208,8 +216,8 @@ if __name__ == "__main__":
         description='Renders a spectrum visualizer video in the style used by BangerSound\'s youtube channel')
     parser.add_argument('input_audio', help='audio to user for generating the visualizer')
     parser.add_argument('input_image', help='image to use as background. image size also sets video resolution')
-    parser.add_argument('--vertical', action='store_true', default=False, help='True or False, display visualizer vertically')
-    parser.add_argument('--fps', type=int, default=60, help='framerate of the rendered video')
+    parser.add_argument('--vertical', action='store_true', default=False,help='True or False, display visualizer vertically')
+    parser.add_argument('--fps', type=int, default=60, help='frame rate of the rendered video')
     parser.add_argument('--fft', type=int, default=512, help='fft resolution')
     parser.add_argument('-b', '--bins', type=int, default=0, help='number of bins for spectrum; 0 for no binning')
     parser.add_argument('-s', '--show', action='store_true',  help='show live output while rendering (for debugging)')
