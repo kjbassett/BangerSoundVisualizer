@@ -71,7 +71,7 @@ def amplitudes_to_coords_generator(frequencies,
     def amplitudes_to_coords(amplitudes):
         # Aggregate amplitudes according to frequency groups
         groups = np.split(amplitudes, group_positions[1:], axis=1)  # gpt had [1:] after both args. Doesn't seem right
-        group_max = np.array([[group[0].mean(), group[1].mean()] for group in groups]).T
+        group_max = np.array([[group[0].max(), group[1].max()] for group in groups]).T
 
         coords = librosa.amplitude_to_db(group_max, ref=0)
 
@@ -136,7 +136,6 @@ def coords_to_image_generator(image, vertical=False):
 
 
 def main(file, background, vertical=False, n_bins=20, fps=60, fft_size=512, show=True):
-    print(vertical)
     duration = 1/fps  # duration in seconds
     half_fft_size = fft_size//2
 
