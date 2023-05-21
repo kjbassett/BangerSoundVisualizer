@@ -3,5 +3,4 @@ numpy~=1.23.5
 opencv-python~=4.7.0.68
 moviepy~=1.0.3
 tqdm~=4.64.1
-pandas~=2.0.0
 scipy~=1.10.0
